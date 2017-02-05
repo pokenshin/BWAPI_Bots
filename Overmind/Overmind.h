@@ -21,5 +21,6 @@ public:
 	virtual void onUnitRenegade(BWAPI::Unit unit); //Chamado quando uma unidade muda de dono, via Mind Control ou Use Map Settings.
 	virtual void onSaveGame(std::string gameName); //Chamado quando um jogo é salvo, com a string do nome do arquivo na variavel gameName
 	virtual void onUnitComplete(BWAPI::Unit unit); //chamado quando uma unidade muda seu status de completa para incompleta.
-
+	
+	virtual void updateOnScreenInfo();
 };

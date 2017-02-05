@@ -16,17 +16,64 @@ void displayError(Position pos, Error lastErr)
 }
 
 // Updates the on screen info
-void updateOnScreenInfo()
+void Overmind::updateOnScreenInfo()
 {
 	// Display the game frame rate as text in the upper left area of the screen
 	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
-	Broodwar->drawTextScreen(200, 20, "Average FPS: %f", Broodwar->getAverageFPS());
+	Broodwar->drawTextScreen(200, 20, "Incomplete Pools: %i", Broodwar->self()->incompleteUnitCount(UnitTypes::Zerg_Spawning_Pool));
+}
+
+// Builds something using a drone.
+void buildStructure(Unit drone, UnitType building)
+{
+
+	// The position to build, where the normal Computer AI would build
+	TilePosition targetBuildLocation = Broodwar->getBuildLocation(building, drone->getTilePosition());
+
+	// If the position is valid
+	if (targetBuildLocation)
+	{
+		// Draws the build location
+		Broodwar->registerEvent([targetBuildLocation, building](Game*)
+		{
+			Broodwar->drawBoxMap(Position(targetBuildLocation),
+				Position(targetBuildLocation + building.tileSize()),
+				Colors::Blue);
+		},
+			nullptr,  // condition
+			building.buildTime() + 100);  // frames to run
+
+		// Order the builder to construct the supply structure
+		drone->build(building, targetBuildLocation);
+	}
+}
+
+bool isValid(Unit u)
+{
+	// Checks if the unit exists
+	if (!u->exists())
+		return false;
+
+	// Check if the unit is locked down, maelstrommed or in stasis
+	if (u->isLockedDown() || u->isMaelstrommed() || u->isStasised())
+		return false;
+
+	// Checks if the unit is loaded, unpowered or stuck somehow
+	if (u->isLoaded() || !u->isPowered() || u->isStuck())
+		return false;
+
+	// Checks if the unit is incomplete or busy constructing
+	if (!u->isCompleted() || u->isConstructing())
+		return false;
+
+	// else return true	
+	return true;
 }
 
 // Handles the Worker AI
 void handleWorkerAI(Unit u)
 {
-	// if our worker is idle
+	// Send Idle Workers to minerals
 	if (u->isIdle())
 	{
 		// Order workers carrying a resource to return them to the center,
@@ -43,45 +90,62 @@ void handleWorkerAI(Unit u)
 				// If the call fails, then print the last error message
 				Broodwar << Broodwar->getLastError() << std::endl;
 			}
-
 		} // closure: has no powerup
-	} // closure: if idle
-}
+	} // End Idle Workers
 
-void handleHatcheryAI(Unit u)
-{
-	// Orders the Hatchery to build more Drones.
-	if (u->isIdle() && !u->train(u->getType().getRace().getWorker()))
+	// Building section
+	// Builds a spawning pool when it has 200 minerals
+	int poolCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool);
+	static int poolRetryTime = 0;
+
+	if (Broodwar->self()->minerals() >= UnitTypes::Zerg_Spawning_Pool.mineralPrice() && poolCount < 1 && poolRetryTime + 400 < Broodwar->getFrameCount())
 	{
-		Position pos = u->getPosition();
-		Error lastErr = Broodwar->getLastError();
-		// If that fails, draw the error at the location so that you can visibly see what went wrong!
-		displayError(pos, lastErr);
-
-		// Retrieve the supply provider type in the case that we have run out of supplies
-		UnitType overlord = u->getType().getRace().getSupplyProvider();
-		static int lastChecked = 0;
-
-		// If we are supply blocked and haven't tried constructing more recently
-		if (lastErr == Errors::Insufficient_Supply &&
-			lastChecked + 400 < Broodwar->getFrameCount() &&
-			Broodwar->self()->incompleteUnitCount(overlord) == 0)
-		{
-			lastChecked = Broodwar->getFrameCount();
-
-			// Retrieve a unit that is capable of constructing the supply needed
-			Unit larva = u->getClosestUnit(GetType == overlord.whatBuilds().first &&
-				IsIdle && IsOwned);
-			// If the larva was found
-			if (larva)
-				// Morph the Overlord!
-				larva->train(overlord);
-		} // closure: insufficient supply
-	} // closure: failed to train idle unit
+		buildStructure(u, UnitTypes::Zerg_Spawning_Pool);
+		poolRetryTime = Broodwar->getFrameCount();
+	}
 }
 
+//Trains an overlord. Requires the hatchery that will spawn it
+void trainOverlord(Unit hatchery)
+{
+	Unit larva = hatchery->getClosestUnit(GetType == UnitTypes::Zerg_Larva && IsOwned && IsIdle);
 
+	if (larva)
+	{
+		larva->train(UnitTypes::Zerg_Overlord);
+		Error lastErr = Broodwar->getLastError();
+		displayError(hatchery->getPosition(), lastErr);
+	}
+}
 
+//Checks if the player has enough supplies. For some reason, requires a supply number you want to check and a hatchery
+bool haveSupplies(int req)
+{
+	//Checks if we have enough supplies
+	if ((Broodwar->self()->supplyTotal() - Broodwar->self()->supplyUsed()) < req)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+//Trains a drone. Requires the hatchery that will spawn it.
+void trainDrone(Unit hatchery)
+{
+	// Retrieve a larva
+	Unit larva = hatchery->getClosestUnit(GetType == UnitTypes::Zerg_Larva && IsOwned && IsIdle);
+
+	// If the larva was found
+	if (larva)
+	{
+		larva->train(UnitTypes::Zerg_Drone);
+		Error lastErr = Broodwar->getLastError();
+		displayError(hatchery->getPosition(), lastErr);
+	}
+}
 // End Custom Functions
 
 // Start BWAI Functions
@@ -137,7 +201,6 @@ void Overmind::onUnitHide(BWAPI::Unit unit)
 
 void Overmind::onUnitCreate(BWAPI::Unit unit)
 {
-
 }
 
 void Overmind::onUnitDestroy(BWAPI::Unit unit)
@@ -182,39 +245,31 @@ void Overmind::onFrame()
 	// Iterate through all the units that we own
 	for (auto &u : Broodwar->self()->getUnits())
 	{
-		// Ignore the unit if it no longer exists
-		// Make sure to include this block when handling any Unit pointer!
-		if (!u->exists())
-			continue;
-
-		// Ignore the unit if it has one of the following status ailments
-		if (u->isLockedDown() || u->isMaelstrommed() || u->isStasised())
-			continue;
-
-		// Ignore the unit if it is in one of the following states
-		if (u->isLoaded() || !u->isPowered() || u->isStuck())
-			continue;
-
-		// Ignore the unit if it is incomplete or busy constructing
-		if (!u->isCompleted() || u->isConstructing())
-			continue;
-
-
-		// Finally make the unit do some stuff!
-
-
-		// If the unit is a worker unit
-		if (u->getType().isWorker())
+		// Checks if the unit is valid
+		if (isValid(u))
 		{
-			// Calls the function to handle Worker-related stuff
-			handleWorkerAI(u);
-		}
+			// Drone AI section
+			if (u->getType() == UnitTypes::Zerg_Drone)
+			{
+				// Calls the function to handle Worker-related stuff
+				handleWorkerAI(u);
+			}
 
-		// If the unit is a Hatchery
-		else if (u->getType().isResourceDepot())
-		{
-			// Calls the function to handle Hatchery AI
-			handleHatcheryAI(u);
+			// Hatchery AI Section (Training Units)
+			else if (u->getType() == UnitTypes::Zerg_Hatchery)
+			{
+				// Drone Training
+				if (haveSupplies(UnitTypes::Zerg_Drone.supplyRequired()))
+				{
+					trainDrone(u);
+				}
+				else
+				{
+					// If there's not an overlord (or anything else) already morphing
+					if (Broodwar->self()->incompleteUnitCount() == 0)
+						trainOverlord(u);
+				}
+			}
 		}
 	} // closure: unit iterator
 }

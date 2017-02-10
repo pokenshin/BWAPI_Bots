@@ -15,31 +15,6 @@ void displayError(Position pos, Error lastErr)
 		Broodwar->getLatencyFrames());  // frames to run
 }
 
-// Builds something using a drone.
-void buildStructure(Unit drone, UnitType building)
-{
-
-	// The position to build, where the normal Computer AI would build
-	TilePosition targetBuildLocation = Broodwar->getBuildLocation(building, drone->getTilePosition());
-
-	// If the position is valid
-	if (targetBuildLocation)
-	{
-		// Draws the build location
-		Broodwar->registerEvent([targetBuildLocation, building](Game*)
-		{
-			Broodwar->drawBoxMap(Position(targetBuildLocation),
-				Position(targetBuildLocation + building.tileSize()),
-				Colors::Blue);
-		},
-			nullptr,  // condition
-			building.buildTime() + 100);  // frames to run
-
-		// Order the builder to construct the supply structure
-		drone->build(building, targetBuildLocation);
-	}
-}
-
 //Checks if the unit is valid
 bool isValid(Unit u)
 {
@@ -61,6 +36,33 @@ bool isValid(Unit u)
 
 	// else return true	
 	return true;
+}
+
+// Builds something.
+void Overmind::buildStructure(UnitType building)
+{
+	// Retrieve a larva
+	Unit drone = Broodwar->getClosestUnit(startPos, IsWorker && IsOwned);
+
+	// The position to build, where the normal Computer AI would build
+	TilePosition targetBuildLocation = Broodwar->getBuildLocation(building, drone->getTilePosition());
+
+	// If the position is valid
+	if (targetBuildLocation)
+	{
+		// Draws the build location
+		Broodwar->registerEvent([targetBuildLocation, building](Game*)
+		{
+			Broodwar->drawBoxMap(Position(targetBuildLocation),
+				Position(targetBuildLocation + building.tileSize()),
+				Colors::Blue);
+		},
+			nullptr,  // condition
+			building.buildTime() + 100);  // frames to run
+
+		// Order the builder to construct the supply structure
+		drone->build(building, targetBuildLocation);
+	}
 }
 
 // Handles the Worker AI
@@ -105,7 +107,7 @@ bool haveSupplies(UnitType unitType)
 void Overmind::trainUnit(UnitType type)
 {
 	//Creates the compare filter to find the larva
-	CompareFilter<UnitType, UnitFilter> isLarva = GetType == UnitTypes::Zerg_Larva && IsOwned;
+	CompareFilter<Unit> isLarva = GetType == UnitTypes::Zerg_Larva && IsOwned;
 	
 	// Retrieve a larva
 	Unit larva = Broodwar->getClosestUnit(startPos, isLarva);
@@ -163,19 +165,20 @@ void Overmind::processBuildOrder()
 			haveSupplies(UnitTypes::Zerg_Drone) &&
 			currentSupply < 9 && // Drones until 9/9
 			currentSupply > 12 && // Drones after Lings, Pool and Overlord
-			currentSupply != 16 // Dont build a drone at 16/18 because 16/18 - Overlord
+			currentSupply != 16 && // Dont build a drone at 16/18 because 16/18 - Overlord
+			(currentSupply == 15 || hatchCount == 2) // Only build at 15/18 if second hatch is on the way because 15/18 - Hatch
 			)
 		{
-			trainUnit(mainHatch, UnitTypes::Zerg_Drone);
+			trainUnit(UnitTypes::Zerg_Drone);
 		}
 		// 9/9 - Pool
 		else if (currentSupply == 9 && 
 			maxSupply == 9 && 
 			poolCount == 0 && 
-			mineralCount >= UnitTypes::Zerg_Spawning_Pool.mineralPrice && 
+			mineralCount >= UnitTypes::Zerg_Spawning_Pool.mineralPrice() && 
 			poolRetryTime + 400 < Broodwar->getFrameCount())
 		{
-			buildStructure(drone, UnitTypes::Zerg_Spawning_Pool);
+			buildStructure(UnitTypes::Zerg_Spawning_Pool);
 			poolRetryTime = Broodwar->getFrameCount();
 		}
 		// 9/9 - Overlord
@@ -185,7 +188,7 @@ void Overmind::processBuildOrder()
 			poolCount == 1 &&
 			mineralCount >= UnitTypes::Zerg_Overlord)
 		{
-			trainUnit(mainHatch, UnitTypes::Zerg_Overlord);
+			trainUnit(UnitTypes::Zerg_Overlord);
 		}
 		// 10 / 18 - Zergling(2)
 		// 11 / 18 - Zergling(4)
@@ -193,27 +196,22 @@ void Overmind::processBuildOrder()
 		else if (currentSupply > 9 &&
 			currentSupply < 13 &&
 			lingCount < 6 &&
-			mineralCount >= UnitTypes::Zerg_Zergling.mineralPrice &&
+			mineralCount >= UnitTypes::Zerg_Zergling.mineralPrice() &&
 			haveSupplies(UnitTypes::Zerg_Zergling)
 			)
 		{
-			trainUnit(mainHatch, UnitTypes::Zerg_Zergling);
+			trainUnit(UnitTypes::Zerg_Zergling);
 		}
 		// 15 / 18 - Hatch	
+		else if (currentSupply == 15 &&
+			hatchCount == 1 &&
+			mineralCount >= UnitTypes::Zerg_Hatchery.mineralPrice())
+		{
+			buildStructure(UnitTypes::Zerg_Spawning_Pool);
+		}
 	}
 	// 21+ Lings and Overlords
-	
-
-
-	
-
-
-	
-
-
-	
-
-
+	//TODO
 }
 
 void Overmind::displayInfo()
@@ -228,10 +226,6 @@ void Overmind::displayInfo()
 	Broodwar->drawTextScreen(200, 60, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
 }
 // End Custom Functions
-
-
-
-
 
 // Start BWAI Functions
 void Overmind::onStart()
@@ -342,46 +336,9 @@ void Overmind::onFrame()
 				// Calls the function to handle Worker-related stuff
 				handleWorkerAI(u);
 			}
-
-			// Hatchery AI Section (Training Units)
-			else if (u->getType() == UnitTypes::Zerg_Hatchery)
-			{
-				// Unit Training
-				// Drone Training
-				// Currently: trains a drone if we have supplies and less than 9 drones
-				if (droneCount <= 9 && haveSupplies(UnitTypes::Zerg_Drone.supplyRequired()))
-					trainUnit(u, UnitTypes::Zerg_Drone);
-
-				// Ling Training
-				// Currently: trains a zergling if we have supplies, a Spawning Pool and at least 9 drones
-				else if (poolCount > 0 && haveSupplies(UnitTypes::Zerg_Zergling.supplyRequired()))
-					trainUnit(u, UnitTypes::Zerg_Zergling);
-
-				// Overlord Training
-				// Currently: trains an overlord if we are supply blocked and not training anything else (improve this)
-				else if (Broodwar->self()->incompleteUnitCount() == 0)
-					trainUnit(u, UnitTypes::Zerg_Overlord);
-			}
 		}
-	} 
-
-	// Building section
-	// Gets the worker to build stuff
-	
-
-	// Builds a spawning pool when it has 200 minerals, it has no pools and after a brief retry time has been elapsed
-	if (Broodwar->self()->minerals() >= UnitTypes::Zerg_Spawning_Pool.mineralPrice() && poolCount < 1 && poolRetryTime + 400 < Broodwar->getFrameCount())
-	{
-		buildStructure(drone, UnitTypes::Zerg_Spawning_Pool);
-		poolRetryTime = Broodwar->getFrameCount();
 	}
 
-	// Builds another hatchery when it has at least 500 minerals and Hatch count is lower than 2
-	if (Broodwar->self()->minerals() >= (UnitTypes::Zerg_Hatchery.mineralPrice() + 200))
-	{
-		buildStructure(drone, UnitTypes::Zerg_Hatchery);
-	}
-
-	
+	//Process our build order.
+	processBuildOrder();
 }
-

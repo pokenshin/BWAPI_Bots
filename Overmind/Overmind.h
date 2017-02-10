@@ -28,6 +28,6 @@ public:
 	virtual void buildStructure(BWAPI::UnitType building); // Builds something
 
 private:
-	BWAPI::Unit mainHatch;
+	BWAPI::Unitset hatches;
 	BWAPI::Position startPos;
 };

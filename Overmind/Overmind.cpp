@@ -106,16 +106,9 @@ bool haveSupplies(UnitType unitType)
 //Trains an unit. Requires the hatchery that will spawn it.
 void Overmind::trainUnit(UnitType type)
 {
-	//Creates the compare filter to find the larva
-	CompareFilter<Unit> isLarva = GetType == UnitTypes::Zerg_Larva && IsOwned;
-	
-	// Retrieve a larva
-	Unit larva = Broodwar->getClosestUnit(startPos, isLarva);
-
-	// If the larva was found
-	if (larva)
+	if (!hatches.empty())
 	{
-		larva->train(type);
+		hatches.train(type);
 	}
 }
 
@@ -163,10 +156,11 @@ void Overmind::processBuildOrder()
 		// 20/27 - Drone(18) (after 3rd Overlord and Hatch)
 		if (mineralCount >= UnitTypes::Zerg_Drone.mineralPrice() &&
 			haveSupplies(UnitTypes::Zerg_Drone) &&
-			currentSupply < 9 && // Drones until 9/9
-			currentSupply > 12 && // Drones after Lings, Pool and Overlord
-			currentSupply != 16 && // Dont build a drone at 16/18 because 16/18 - Overlord
-			(currentSupply == 15 || hatchCount == 2) // Only build at 15/18 if second hatch is on the way because 15/18 - Hatch
+				(
+					(currentSupply < 9 || currentSupply > 12) || // Drones until 9/9 or after lings, pool and overlords (12/18)
+					currentSupply != 16 || // Dont build a drone at 16/18 because 16/18 - Overlord
+					(currentSupply == 15 && hatchCount == 2) // Only build at 15/18 if second hatch is on the way because 15/18 - Hatch
+				)
 			)
 		{
 			trainUnit(UnitTypes::Zerg_Drone);
@@ -207,7 +201,8 @@ void Overmind::processBuildOrder()
 			hatchCount == 1 &&
 			mineralCount >= UnitTypes::Zerg_Hatchery.mineralPrice())
 		{
-			buildStructure(UnitTypes::Zerg_Spawning_Pool);
+			buildStructure(UnitTypes::Zerg_Hatchery);
+			hatches = Broodwar->getUnitsInRadius(startPos, 99999, IsResourceDepot && IsOwned);
 		}
 	}
 	// 21+ Lings and Overlords
@@ -227,12 +222,11 @@ void Overmind::displayInfo()
 {
 	// Update on screen information
 	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
-	Broodwar->drawTextScreen(200, 10, "Main Hatch: %s", boolToString(mainHatch));
-	Broodwar->drawTextScreen(200, 20, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
-	Broodwar->drawTextScreen(200, 30, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
-	Broodwar->drawTextScreen(200, 40, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
-	Broodwar->drawTextScreen(200, 50, "Hatcheries: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery));
-	Broodwar->drawTextScreen(200, 60, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
+	Broodwar->drawTextScreen(200, 10, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
+	Broodwar->drawTextScreen(200, 20, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
+	Broodwar->drawTextScreen(200, 30, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
+	Broodwar->drawTextScreen(200, 40, "Hatcheries: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery));
+	Broodwar->drawTextScreen(200, 50, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
 }
 // End Custom Functions
 
@@ -243,8 +237,9 @@ void Overmind::onStart()
 
 	//Sets our start position
 	startPos = Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
-	//Sets our main hatch
-	mainHatch = Broodwar->getClosestUnit(startPos, Filter::IsResourceContainer && Filter::IsOwned);
+	//Locates the main hatch and adds to the hatches Unitset
+	Unit hatch = Broodwar->getClosestUnit(startPos, IsResourceDepot && IsOwned);
+	hatches.insert(hatch);
 }
 
 void Overmind::onEnd(bool isWinner)

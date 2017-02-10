@@ -214,11 +214,20 @@ void Overmind::processBuildOrder()
 	//TODO
 }
 
+//Converts a boolean to string, for debug porpouses
+std::string boolToString(bool predicate)
+{
+	if (predicate)
+		return "True";
+	else
+		return "False";
+}
+
 void Overmind::displayInfo()
 {
 	// Update on screen information
 	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
-	Broodwar->drawTextScreen(200, 10, "Main Hatch: %b", isValid(mainHatch));
+	Broodwar->drawTextScreen(200, 10, "Main Hatch: %s", boolToString(mainHatch));
 	Broodwar->drawTextScreen(200, 20, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
 	Broodwar->drawTextScreen(200, 30, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
 	Broodwar->drawTextScreen(200, 40, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
@@ -314,6 +323,9 @@ void Overmind::onUnitComplete(BWAPI::Unit unit)
 
 void Overmind::onFrame()
 {
+	//Displays stuff on screen.
+	displayInfo();
+	
 	// Return if the game is a replay or is paused
 	if (Broodwar->isReplay() || Broodwar->isPaused() || !Broodwar->self())
 		return;

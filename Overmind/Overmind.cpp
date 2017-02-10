@@ -40,6 +40,7 @@ void buildStructure(Unit drone, UnitType building)
 	}
 }
 
+//Checks if the unit is valid
 bool isValid(Unit u)
 {
 	// Checks if the unit exists
@@ -84,17 +85,13 @@ void handleWorkerAI(Unit u)
 			}
 		} // closure: has no powerup
 	} // End Idle Workers
-
-
-
-
 }
 
-//Checks if the player has enough supplies. For some reason, requires a supply number you want to check and a hatchery
-bool haveSupplies(int req)
+//Checks if the player has enough supplies to train a certain unit. Requires the UnitType you want to check.
+bool haveSupplies(UnitType unitType)
 {
 	//Checks if we have enough supplies
-	if ((Broodwar->self()->supplyTotal() - Broodwar->self()->supplyUsed()) < req)
+	if ((Broodwar->self()->supplyTotal() - Broodwar->self()->supplyUsed()) < unitType.supplyRequired())
 	{
 		return false;
 	}
@@ -104,28 +101,147 @@ bool haveSupplies(int req)
 	}
 }
 
-//Trains a drone. Requires the hatchery that will spawn it.
-void trainUnit(Unit hatchery, UnitType type)
+//Trains an unit. Requires the hatchery that will spawn it.
+void Overmind::trainUnit(UnitType type)
 {
+	//Creates the compare filter to find the larva
+	CompareFilter<UnitType, UnitFilter> isLarva = GetType == UnitTypes::Zerg_Larva && IsOwned;
+	
 	// Retrieve a larva
-	Unit larva = hatchery->getClosestUnit(GetType == UnitTypes::Zerg_Larva && IsOwned && IsIdle);
+	Unit larva = Broodwar->getClosestUnit(startPos, isLarva);
 
 	// If the larva was found
 	if (larva)
 	{
 		larva->train(type);
-		Error lastErr = Broodwar->getLastError();
-		displayError(hatchery->getPosition(), lastErr);
 	}
 }
+
+//Attempts to follow a build order
+void Overmind::processBuildOrder()
+{
+	//Stores the current step we are currently in.
+	//static int currentStep = 0;
+	int currentSupply = Broodwar->self()->supplyUsed();
+	int maxSupply = Broodwar->self()->supplyTotal();
+
+	//Unit Count
+	int droneCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone);
+	int lingCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling);
+	int overlordCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord);
+
+	//Building Count
+	int hatchCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery);
+	int poolCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool);
+
+	//Resource Count
+	int mineralCount = Broodwar->self()->minerals();
+	int gasCount = Broodwar->self()->gas();
+
+	//Gets a builder
+	Unit drone = Broodwar->getClosestUnit(startPos, Filter::IsWorker && Filter::IsOwned);
+
+	//Counters to avoid double building related crashes
+	static int poolRetryTime = 0;
+
+	// While we have less than 18 drones, prioritize drones
+	if (droneCount < 18)
+	{
+		// 6/9 - Drone(7)
+		// 7/9 - Drone(8)
+		// 8/9 - Drone(9)
+		// 8/9 - Drone(10) (after 9/9 - Pool)
+		// 9/18 - Drone(11) (after 9/9 - Overlord)
+		// 13/18 - Drone(12) (after lings)
+		// 14/18 - Drone(13) (after lings)
+		// 15/18 - Drone(14) (after lings)
+		// 17/18 - Drone(15) (after 3rd Overlord and Hatch)
+		// 18/27 - Drone(16) (after 3rd Overlord and Hatch)
+		// 19/27 - Drone(17) (after 3rd Overlord and Hatch)
+		// 20/27 - Drone(18) (after 3rd Overlord and Hatch)
+		if (mineralCount >= UnitTypes::Zerg_Drone.mineralPrice() &&
+			haveSupplies(UnitTypes::Zerg_Drone) &&
+			currentSupply < 9 && // Drones until 9/9
+			currentSupply > 12 && // Drones after Lings, Pool and Overlord
+			currentSupply != 16 // Dont build a drone at 16/18 because 16/18 - Overlord
+			)
+		{
+			trainUnit(mainHatch, UnitTypes::Zerg_Drone);
+		}
+		// 9/9 - Pool
+		else if (currentSupply == 9 && 
+			maxSupply == 9 && 
+			poolCount == 0 && 
+			mineralCount >= UnitTypes::Zerg_Spawning_Pool.mineralPrice && 
+			poolRetryTime + 400 < Broodwar->getFrameCount())
+		{
+			buildStructure(drone, UnitTypes::Zerg_Spawning_Pool);
+			poolRetryTime = Broodwar->getFrameCount();
+		}
+		// 9/9 - Overlord
+		// 16/18 - Overlord
+		else if (((currentSupply == maxSupply && overlordCount <= 1) || // 9/9 - Overlord
+			(currentSupply == 16 && overlordCount <= 2)) && // 16/18 - Overlord
+			poolCount == 1 &&
+			mineralCount >= UnitTypes::Zerg_Overlord)
+		{
+			trainUnit(mainHatch, UnitTypes::Zerg_Overlord);
+		}
+		// 10 / 18 - Zergling(2)
+		// 11 / 18 - Zergling(4)
+		// 12 / 18 - Zergling(6)
+		else if (currentSupply > 9 &&
+			currentSupply < 13 &&
+			lingCount < 6 &&
+			mineralCount >= UnitTypes::Zerg_Zergling.mineralPrice &&
+			haveSupplies(UnitTypes::Zerg_Zergling)
+			)
+		{
+			trainUnit(mainHatch, UnitTypes::Zerg_Zergling);
+		}
+		// 15 / 18 - Hatch	
+	}
+	// 21+ Lings and Overlords
+	
+
+
+	
+
+
+	
+
+
+	
+
+
+}
+
+void Overmind::displayInfo()
+{
+	// Update on screen information
+	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
+	Broodwar->drawTextScreen(200, 10, "Main Hatch: %b", isValid(mainHatch));
+	Broodwar->drawTextScreen(200, 20, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
+	Broodwar->drawTextScreen(200, 30, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
+	Broodwar->drawTextScreen(200, 40, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
+	Broodwar->drawTextScreen(200, 50, "Hatcheries: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery));
+	Broodwar->drawTextScreen(200, 60, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
+}
 // End Custom Functions
+
+
+
+
 
 // Start BWAI Functions
 void Overmind::onStart()
 {
-	//Makes the game FAAAAAAST
-	Broodwar->setFrameSkip(20);
 	Broodwar->sendText("Awaken my child and embrace the glory that is your birthright.");
+
+	//Sets our start position
+	startPos = Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
+	//Sets our main hatch
+	mainHatch = Broodwar->getClosestUnit(startPos, Filter::IsResourceContainer && Filter::IsOwned);
 }
 
 void Overmind::onEnd(bool isWinner)
@@ -204,29 +320,6 @@ void Overmind::onUnitComplete(BWAPI::Unit unit)
 
 void Overmind::onFrame()
 {
-	// Finds the start Position
-	Position startPos = Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
-
-	//Unit Count
-	int droneCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone);
-	int lingCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling);
-	int overlordCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord);
-
-	//Building Count
-	int hatchCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery);
-	int poolCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool);
-
-	//Counters to avoid double building related crashes
-	static int poolRetryTime = 0;
-
-	// Update on screen information
-	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
-	Broodwar->drawTextScreen(200, 10, "Drones: %i", droneCount);
-	Broodwar->drawTextScreen(200, 20, "Lings: %i", lingCount);
-	Broodwar->drawTextScreen(200, 30, "Overlords: %i", overlordCount);
-	Broodwar->drawTextScreen(200, 40, "Hatcheries: %i", hatchCount);
-	Broodwar->drawTextScreen(200, 50, "Pools: %i", poolCount);
-	
 	// Return if the game is a replay or is paused
 	if (Broodwar->isReplay() || Broodwar->isPaused() || !Broodwar->self())
 		return;
@@ -274,8 +367,7 @@ void Overmind::onFrame()
 
 	// Building section
 	// Gets the worker to build stuff
-	Unit drone = Broodwar->getClosestUnit(startPos, Filter::IsWorker && Filter::IsOwned);
-
+	
 
 	// Builds a spawning pool when it has 200 minerals, it has no pools and after a brief retry time has been elapsed
 	if (Broodwar->self()->minerals() >= UnitTypes::Zerg_Spawning_Pool.mineralPrice() && poolCount < 1 && poolRetryTime + 400 < Broodwar->getFrameCount())
@@ -284,7 +376,7 @@ void Overmind::onFrame()
 		poolRetryTime = Broodwar->getFrameCount();
 	}
 
-	// Builds another hatchery when it has at least 500 minerals
+	// Builds another hatchery when it has at least 500 minerals and Hatch count is lower than 2
 	if (Broodwar->self()->minerals() >= (UnitTypes::Zerg_Hatchery.mineralPrice() + 200))
 	{
 		buildStructure(drone, UnitTypes::Zerg_Hatchery);

@@ -24,8 +24,9 @@ public:
 	//Custom Functions
 	virtual void displayInfo(); //Called to display debug info on BW screen
 	virtual void processBuildOrder(); //Processes the build order
-	virtual void trainUnit(BWAPI::UnitType type); // Trains an unit
 	virtual void buildStructure(BWAPI::UnitType building); // Builds something
+	virtual void Overmind::trainUnit(BWAPI::UnitType type); // Trains an unit
+	virtual bool Overmind::haveLarva(); // Checks if we have any larva avaliable
 
 private:
 	BWAPI::Unitset hatches;

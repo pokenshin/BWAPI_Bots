@@ -112,13 +112,29 @@ void Overmind::trainUnit(UnitType type)
 	}
 }
 
+//Checks if we have any larva avaliable
+bool Overmind::haveLarva()
+{
+	Unitset larvae = hatches.getLarva();
+
+	if (larvae.size() > 0)
+	{
+		for (auto &u : larvae)
+		{
+			if (isValid(u))
+				return true;
+		}
+		return false;
+	}
+}
+
 //Attempts to follow a build order
 void Overmind::processBuildOrder()
 {
 	//Stores the current step we are currently in.
 	//static int currentStep = 0;
-	int currentSupply = Broodwar->self()->supplyUsed();
-	int maxSupply = Broodwar->self()->supplyTotal();
+	int currentSupply = Broodwar->self()->supplyUsed() / 2;
+	int maxSupply = Broodwar->self()->supplyTotal() / 2;
 
 	//Unit Count
 	int droneCount = Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone);
@@ -138,6 +154,8 @@ void Overmind::processBuildOrder()
 
 	//Counters to avoid double building related crashes
 	static int poolRetryTime = 0;
+	static int overlordRetryTime = 0;
+	static int hatchRetryTime = 0;
 
 	// While we have less than 18 drones, prioritize drones
 	if (droneCount < 18)
@@ -145,21 +163,30 @@ void Overmind::processBuildOrder()
 		// 6/9 - Drone(7)
 		// 7/9 - Drone(8)
 		// 8/9 - Drone(9)
-		// 8/9 - Drone(10) (after 9/9 - Pool)
-		// 9/18 - Drone(11) (after 9/9 - Overlord)
-		// 13/18 - Drone(12) (after lings)
-		// 14/18 - Drone(13) (after lings)
-		// 15/18 - Drone(14) (after lings)
-		// 17/18 - Drone(15) (after 3rd Overlord and Hatch)
-		// 18/27 - Drone(16) (after 3rd Overlord and Hatch)
-		// 19/27 - Drone(17) (after 3rd Overlord and Hatch)
-		// 20/27 - Drone(18) (after 3rd Overlord and Hatch)
+		// 8/9 - Drone(9) (after 9/9 - Pool)
+		// 9/17 - Drone(10) (after 9/9 - Overlord)
+		// 13/17 - Drone(11) (after lings)
+		// 14/17 - Drone(12) (after lings)
+		// 15/17 - Drone(13) (after lings)
+		// 16/17 - Drone(13) (after 3rd Overlord and Hatch)
+		// 17/25 - Drone(14) (after 3rd Overlord and Hatch)
+		// 18/25 - Drone(15) (after 3rd Overlord and Hatch)
+		// 19/25 - Drone(16) (after 3rd Overlord and Hatch)
+		// 20/25 - Drone(17) (after 3rd Overlord and Hatch)
+		// 21/25 - Drone(18) (after 3rd Overlord and Hatch)
 		if (mineralCount >= UnitTypes::Zerg_Drone.mineralPrice() &&
 			haveSupplies(UnitTypes::Zerg_Drone) &&
 				(
-					(currentSupply < 9 || currentSupply > 12) || // Drones until 9/9 or after lings, pool and overlords (12/18)
-					currentSupply != 16 || // Dont build a drone at 16/18 because 16/18 - Overlord
-					(currentSupply == 15 && hatchCount == 2) // Only build at 15/18 if second hatch is on the way because 15/18 - Hatch
+					currentSupply != 15 || //Dont train a drone at 15 because 15/17 - Hatchery
+					(currentSupply == 15 && hatchCount == 2) //Only train a drone if hatch is already on the way
+				) &&
+				(
+					currentSupply != 16 || // Dont train a drone at 16/18 because 16/18 - Overlord
+					(currentSupply == 16 && overlordCount == 3 && hatchCount == 2) // Only build drones at 16 after OL and Hatch
+				) &&
+				(
+					(currentSupply <= 9 || currentSupply >= 13) || // Drones until 9/9 or after lings, pool and overlords (12/18)
+			 		(currentSupply > 14 && hatchCount == 2) // Only build at 15/18 if second hatch is on the way because 15/18 - Hatch
 				)
 			)
 		{
@@ -176,17 +203,21 @@ void Overmind::processBuildOrder()
 			poolRetryTime = Broodwar->getFrameCount();
 		}
 		// 9/9 - Overlord
-		// 16/18 - Overlord
-		else if (((currentSupply == maxSupply && overlordCount <= 1) || // 9/9 - Overlord
-			(currentSupply == 16 && overlordCount <= 2)) && // 16/18 - Overlord
-			poolCount == 1 &&
-			mineralCount >= UnitTypes::Zerg_Overlord)
+		// 16/17 - Overlord
+		else if (((currentSupply == maxSupply && overlordCount <= 1 && poolCount == 1) || // 9/9 - Overlord after 9/9 - Pool
+			(currentSupply == 16 && overlordCount < 3)) && // 16/18 - Overlord
+			mineralCount >= UnitTypes::Zerg_Overlord.mineralPrice() &&
+			overlordRetryTime + 100 + UnitTypes::Zerg_Overlord.buildTime() < Broodwar->getFrameCount())
 		{
-			trainUnit(UnitTypes::Zerg_Overlord);
+			if (haveLarva()) // Sees if we have enough larvae so we dont trigger the timer without training an overlord. Saves time at 16/18 - Overlord
+			{
+				trainUnit(UnitTypes::Zerg_Overlord);
+				overlordRetryTime = Broodwar->getFrameCount();
+			}
 		}
-		// 10 / 18 - Zergling(2)
-		// 11 / 18 - Zergling(4)
-		// 12 / 18 - Zergling(6)
+		// 10 / 17 - Zergling(2)
+		// 11 / 17 - Zergling(4)
+		// 12 / 17 - Zergling(6)
 		else if (currentSupply > 9 &&
 			currentSupply < 13 &&
 			lingCount < 6 &&
@@ -196,13 +227,14 @@ void Overmind::processBuildOrder()
 		{
 			trainUnit(UnitTypes::Zerg_Zergling);
 		}
-		// 15 / 18 - Hatch	
+		// 15 / 17 - Hatch	
 		else if (currentSupply == 15 &&
 			hatchCount == 1 &&
+			hatchRetryTime + 200 + UnitTypes::Zerg_Hatchery.buildTime() < Broodwar->getFrameCount() &&
 			mineralCount >= UnitTypes::Zerg_Hatchery.mineralPrice())
 		{
 			buildStructure(UnitTypes::Zerg_Hatchery);
-			hatches = Broodwar->getUnitsInRadius(startPos, 99999, IsResourceDepot && IsOwned);
+			hatchRetryTime = Broodwar->getFrameCount();
 		}
 	}
 	// 21+ Lings and Overlords
@@ -237,9 +269,6 @@ void Overmind::onStart()
 
 	//Sets our start position
 	startPos = Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
-	//Locates the main hatch and adds to the hatches Unitset
-	Unit hatch = Broodwar->getClosestUnit(startPos, IsResourceDepot && IsOwned);
-	hatches.insert(hatch);
 }
 
 void Overmind::onEnd(bool isWinner)
@@ -320,6 +349,9 @@ void Overmind::onFrame()
 {
 	//Displays stuff on screen.
 	displayInfo();
+
+	// Updates our hatch list (probably best if setup elsewhere)
+	hatches = Broodwar->getUnitsInRadius(startPos, 99999, IsResourceDepot && IsOwned);
 	
 	// Return if the game is a replay or is paused
 	if (Broodwar->isReplay() || Broodwar->isPaused() || !Broodwar->self())

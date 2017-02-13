@@ -126,6 +126,8 @@ bool Overmind::haveLarva()
 		}
 		return false;
 	}
+	else
+		return false;
 }
 
 //Attempts to follow a build order
@@ -237,8 +239,20 @@ void Overmind::processBuildOrder()
 			hatchRetryTime = Broodwar->getFrameCount();
 		}
 	}
-	// 21+ Lings and Overlords
-	//TODO
+	else // 21+ Lings and Overlords
+	{
+		//Builds an Overlord if we're supply blocked and have the minerals
+		if (currentSupply == maxSupply && mineralCount >= UnitTypes::Zerg_Overlord.mineralPrice() && overlordRetryTime + 100 + UnitTypes::Zerg_Overlord.buildTime() < Broodwar->getFrameCount() && haveLarva())
+		{
+			trainUnit(UnitTypes::Zerg_Overlord);
+			overlordRetryTime = Broodwar->getFrameCount();
+		}
+		//Builds Zerglings if we have supplies and the minerals
+		if (haveSupplies(UnitTypes::Zerg_Zergling) && mineralCount >= UnitTypes::Zerg_Zergling.mineralPrice())
+		{
+			trainUnit(UnitTypes::Zerg_Zergling);
+		}
+	}
 }
 
 //Converts a boolean to string, for debug porpouses

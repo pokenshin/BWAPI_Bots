@@ -1,5 +1,6 @@
 #pragma once
 #include <BWAPI.h>
+#include <Windows.h>
 
 class Overmind : public BWAPI::AIModule
 {
@@ -21,14 +22,12 @@ public:
 	virtual void onUnitRenegade(BWAPI::Unit unit); //Called when an unit changes alliegence thorugh Mind Control or some kind of UMS.
 	virtual void onSaveGame(std::string gameName); //Called when the game is saved.
 	virtual void onUnitComplete(BWAPI::Unit unit); //Called when an unit changes its status from complete to incomplete.
+	//BWTA Functions
+	void drawTerrainData();
 	//Custom Functions
 	virtual void displayInfo(); //Called to display debug info on BW screen
 	virtual void processBuildOrder(); //Processes the build order
 	virtual void buildStructure(BWAPI::UnitType building); // Builds something
 	virtual void Overmind::trainUnit(BWAPI::UnitType type); // Trains an unit
 	virtual bool Overmind::haveLarva(); // Checks if we have any larva avaliable
-
-private:
-	BWAPI::Unitset hatches;
-	BWAPI::Position startPos;
 };

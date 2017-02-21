@@ -1,10 +1,29 @@
 #include "Overmind.h"
 #include <iostream>
+#include "BWEM/src/bwem.h"
 
 using namespace BWAPI;
 using namespace Filter;
+using namespace BWEM;
+using namespace BWEM::BWAPI_ext;
+using namespace BWEM::utils;
 
-// Custom Functions
+namespace { auto & theMap = BWEM::Map::Instance(); }
+
+//Custom variables;
+Unitset hatches; // Our Hatcheries
+Unitset zerglings; // Our Zerglings
+Position startPos; // Our Start Position
+
+// BWEM
+std::vector<Area> allAreas;
+std::vector<Base> allBases;
+std::vector<Base> ourExpos;
+std::vector<Base> enemyExpos;
+Position enemyMain;
+Position ourMain;
+
+
 // Error displaying function
 void displayError(Position pos, Error lastErr)
 {
@@ -87,6 +106,22 @@ void handleWorkerAI(Unit u)
 			}
 		} // closure: has no powerup
 	} // End Idle Workers
+}
+
+// Handles the Zergling AI
+void handleZerglingAI(Unit u)
+{
+	//Attack-moves the zerglings to the nearest choke
+	//u->attack(nearestChoke->getCenter());
+}
+
+void handleOverlordAI(Unit u)
+{
+
+	if (u->isIdle())
+	{
+		// Moves the overlord to the enemy base if its idle and we still have bases unscouted.	
+	}
 }
 
 //Checks if the player has enough supplies to train a certain unit. Requires the UnitType you want to check.
@@ -255,7 +290,7 @@ void Overmind::processBuildOrder()
 	}
 }
 
-//Converts a boolean to string, for debug porpouses
+//Converts a predicate result (true or false) to string, for debug porpouses
 std::string boolToString(bool predicate)
 {
 	if (predicate)
@@ -267,22 +302,51 @@ std::string boolToString(bool predicate)
 void Overmind::displayInfo()
 {
 	// Update on screen information
-	Broodwar->drawTextScreen(200, 0, "FPS: %d", Broodwar->getFPS());
-	Broodwar->drawTextScreen(200, 10, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
-	Broodwar->drawTextScreen(200, 20, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
-	Broodwar->drawTextScreen(200, 30, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
-	Broodwar->drawTextScreen(200, 40, "Hatcheries: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery));
-	Broodwar->drawTextScreen(200, 50, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
+	Broodwar->drawTextScreen(50, 0, "FPS: %d", Broodwar->getFPS());
+	Broodwar->drawTextScreen(50, 10, "Drones: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Drone));
+	Broodwar->drawTextScreen(50, 20, "Lings: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Zergling));
+	Broodwar->drawTextScreen(50, 30, "Overlords: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Overlord));
+	Broodwar->drawTextScreen(50, 40, "Hatcheries: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Hatchery));
+	Broodwar->drawTextScreen(50, 50, "Pools: %i", Broodwar->self()->allUnitCount(UnitTypes::Zerg_Spawning_Pool));
+	Broodwar->drawTextScreen(50, 60, "Our Start Pos: %i, %i", startPos);
 }
 // End Custom Functions
 
 // Start BWAI Functions
 void Overmind::onStart()
 {
-	Broodwar->sendText("Awaken my child and embrace the glory that is your birthright.");
+	try
+	{ 
+		// Flavour Text
+		Broodwar->sendText("Awaken my child and embrace the glory that is your birthright.");
+		// Enables user input during the game
+		Broodwar->enableFlag(BWAPI::Flag::UserInput);
 
-	//Sets our start position
-	startPos = Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
+		// Retrieve you and your enemy's races. enemy() will just return the first enemy.
+		// If you wish to deal with multiple enemies then you must use enemies().
+		if (Broodwar->enemy()) // First make sure there is an enemy
+			Broodwar << "The matchup is " << Broodwar->self()->getRace() << " vs " << Broodwar->enemy()->getRace() << std::endl;
+
+		Broodwar << "Map initialization..." << std::endl;
+
+		theMap.Initialize(); // Initializes the BWEM variable
+		theMap.EnableAutomaticPathAnalysis(); // Enables automatic path analysis for the map
+		bool startingLocationsOK = theMap.FindBasesForStartingLocations(); // Tries to find the starting locations
+		assert(startingLocationsOK); // Makes the code fail if we dont find the starting locations
+
+		BWEM::utils::MapPrinter::Initialize(&theMap);
+		BWEM::utils::printMap(theMap);      // will print the map into the file <StarCraftFolder>bwapi-data/map.bmp
+		BWEM::utils::pathExample(theMap);   // add to the printed map a path between two starting locations
+
+		//Finds our main location
+		startPos = BWAPI::Position(Broodwar->self()->getStartLocation().x, Broodwar->self()->getStartLocation().y);
+
+		Broodwar << "glhf" << std::endl;
+	}
+	catch (const std::exception & e)
+	{
+		Broodwar << "ERROR at onStart! " << e.what() << std::endl;
+	}
 }
 
 void Overmind::onEnd(bool isWinner)
@@ -292,7 +356,8 @@ void Overmind::onEnd(bool isWinner)
 
 void Overmind::onSendText(std::string text)
 {
-
+	BWEM::utils::MapDrawer::ProcessCommand(text);
+	Broodwar->sendText("%s", text.c_str());
 }
 
 void Overmind::onReceiveText(BWAPI::Player player, std::string text)
@@ -336,12 +401,25 @@ void Overmind::onUnitCreate(BWAPI::Unit unit)
 
 void Overmind::onUnitDestroy(BWAPI::Unit unit)
 {
+	try
+	{
+		if (unit->getType().isMineralField())
+			theMap.OnMineralDestroyed(unit);
+		else if (unit->getType().isSpecialBuilding())
+			theMap.OnStaticBuildingDestroyed(unit);
+	}
+	catch (const std::exception & e)
+	{
+		Broodwar << "ERROR at onUnitDestroy! " << e.what() << std::endl;
+	}
+
 
 }
 
 void Overmind::onUnitMorph(BWAPI::Unit unit)
 {
-
+	if (unit->getType() == UnitTypes::Zerg_Zergling && unit->getPlayer() == Broodwar->self())
+		zerglings.insert(unit); // Adds the newly born zergling to our zerglings group
 }
 
 void Overmind::onUnitRenegade(BWAPI::Unit unit)
@@ -361,37 +439,62 @@ void Overmind::onUnitComplete(BWAPI::Unit unit)
 
 void Overmind::onFrame()
 {
-	//Displays stuff on screen.
-	displayInfo();
-
-	// Updates our hatch list (probably best if setup elsewhere)
-	hatches = Broodwar->getUnitsInRadius(startPos, 99999, IsResourceDepot && IsOwned);
-	
-	// Return if the game is a replay or is paused
-	if (Broodwar->isReplay() || Broodwar->isPaused() || !Broodwar->self())
-		return;
-
-	// Prevent spamming by only running our onFrame once every number of latency frames.
-	// Latency frames are the number of frames before commands are processed.
-	if (Broodwar->getFrameCount() % Broodwar->getLatencyFrames() != 0)
-		return;
-
-	// Unit handling
-	// Unit iterator
-	for (auto &u : Broodwar->self()->getUnits())
+	try
 	{
-		// Checks if the unit is valid
-		if (isValid(u))
+		if (Broodwar->isReplay() || Broodwar->isPaused() || !Broodwar->self())
+			return;
+
+		// Draws the map instead of printing it to a file
+		BWEM::utils::gridMapExample(theMap);
+		BWEM::utils::drawMap(theMap);
+
+		//Displays stuff on screen.
+		displayInfo();
+
+		// Updates our hatch list (probably best if setup elsewhere)
+		hatches = Broodwar->getUnitsInRadius(startPos, 99999, IsResourceDepot && IsOwned);
+
+		// Return if the game is a replay or is paused
+
+
+		// Prevent spamming by only running our onFrame once every number of latency frames.
+		// Latency frames are the number of frames before commands are processed.
+		if (Broodwar->getFrameCount() % Broodwar->getLatencyFrames() != 0)
+			return;
+
+		// Unit handling
+		// Unit iterator
+		for (auto &u : Broodwar->self()->getUnits())
 		{
-			// Drone AI section
-			if (u->getType() == UnitTypes::Zerg_Drone)
+			// Checks if the unit is valid
+			if (isValid(u))
 			{
-				// Calls the function to handle Worker-related stuff
-				handleWorkerAI(u);
+				// Drone AI section
+				if (u->getType() == UnitTypes::Zerg_Drone)
+				{
+					// Calls the function to handle Worker-related stuff
+					handleWorkerAI(u);
+				}
+				// Overlord AI section
+				if (u->getType() == UnitTypes::Zerg_Overlord)
+				{
+					handleOverlordAI(u);
+				}
+				//Zergling AI section
+				if (u->getType() == UnitTypes::Zerg_Zergling)
+				{
+					handleZerglingAI(u);
+				}
 			}
 		}
-	}
 
-	//Process our build order.
-	processBuildOrder();
+		//Process our build order.
+		processBuildOrder();
+	}
+	catch (const std::exception & e)
+	{
+		Broodwar << "ERROR at onFrame! " << e.what() << std::endl;
+	}
+	
+
 }

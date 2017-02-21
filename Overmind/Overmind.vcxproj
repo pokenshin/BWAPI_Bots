@@ -56,14 +56,14 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;_WINDOWS;_USRDLL;OVERMIND_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\BWAPI\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\BWAPI\include;C:\Program Files %28x86%29\BWAPI\BWTAlib_2.2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ObjectFileName>$(IntDir)</ObjectFileName>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>C:\Program Files (x86)\BWAPI\lib\BWAPId.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>C:\Program Files (x86)\BWAPI\lib\BWAPId.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\BWTAd.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libboost_thread-vc120-mt-gd-1_56.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libboost_system-vc120-mt-gd-1_56.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libCGAL-vc120-mt-gd-4.4.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libgmp-10.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libmpfr-4.lib;C:\Program Files (x86)\BWAPI\BWTAlib_2.2\lib\libboost_filesystem-vc120-mt-gd-1_56.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -76,7 +76,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;_USRDLL;OVERMIND_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\BWAPI\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\BWAPI\BWTAlib_2.2\include;C:\Program Files (x86)\BWAPI\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -87,11 +87,52 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BWEM\EasyBMP_1.06\EasyBMP.cpp" />
+    <ClCompile Include="BWEM\src\area.cpp" />
+    <ClCompile Include="BWEM\src\base.cpp" />
+    <ClCompile Include="BWEM\src\bwapiExt.cpp" />
+    <ClCompile Include="BWEM\src\bwem.cpp" />
+    <ClCompile Include="BWEM\src\cp.cpp" />
+    <ClCompile Include="BWEM\src\examples.cpp" />
+    <ClCompile Include="BWEM\src\graph.cpp" />
+    <ClCompile Include="BWEM\src\gridMap.cpp" />
+    <ClCompile Include="BWEM\src\map.cpp" />
+    <ClCompile Include="BWEM\src\mapDrawer.cpp" />
+    <ClCompile Include="BWEM\src\mapImpl.cpp" />
+    <ClCompile Include="BWEM\src\mapPrinter.cpp" />
+    <ClCompile Include="BWEM\src\neutral.cpp" />
+    <ClCompile Include="BWEM\src\tiles.cpp" />
+    <ClCompile Include="BWEM\src\utils.cpp" />
+    <ClCompile Include="BWEM\src\winutils.cpp" />
     <ClCompile Include="Dll.cpp" />
     <ClCompile Include="Overmind.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BWEM\EasyBMP_1.06\EasyBMP.h" />
+    <ClInclude Include="BWEM\src\area.h" />
+    <ClInclude Include="BWEM\src\base.h" />
+    <ClInclude Include="BWEM\src\bwapiExt.h" />
+    <ClInclude Include="BWEM\src\bwem.h" />
+    <ClInclude Include="BWEM\src\cp.h" />
+    <ClInclude Include="BWEM\src\defs.h" />
+    <ClInclude Include="BWEM\src\examples.h" />
+    <ClInclude Include="BWEM\src\graph.h" />
+    <ClInclude Include="BWEM\src\gridMap.h" />
+    <ClInclude Include="BWEM\src\map.h" />
+    <ClInclude Include="BWEM\src\mapDrawer.h" />
+    <ClInclude Include="BWEM\src\mapImpl.h" />
+    <ClInclude Include="BWEM\src\mapPrinter.h" />
+    <ClInclude Include="BWEM\src\neutral.h" />
+    <ClInclude Include="BWEM\src\tiles.h" />
+    <ClInclude Include="BWEM\src\utils.h" />
+    <ClInclude Include="BWEM\src\winutils.h" />
     <ClInclude Include="Overmind.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="BWEM\src\area.h.bak" />
+    <None Include="BWEM\src\cp.h.bak" />
+    <None Include="BWEM\src\tiles.h.bak" />
+    <None Include="BWEM\src\utils.h.bak" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
